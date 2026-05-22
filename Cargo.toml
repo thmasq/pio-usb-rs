@@ -2,20 +2,19 @@
 name = "pio-usb-rs"
 version = "0.1.0"
 edition = "2024"
-description = "A pure Rust PIO-based USB host/device driver for RP2040"
 license = "MIT OR Apache-2.0"
+description = "A pure Rust PIO-based USB host/device driver for RP2040"
 
 [dependencies]
-embassy-rp = { version = "0.10.0", features = ["unstable-pac", "time-driver"] }
-embassy-usb = { version = "0.6.0", default-features = false }
-embassy-time = "0.5.1"
 embassy-futures = "0.1.2"
+embassy-rp = { version = "0.10.0", features = ["unstable-pac", "time-driver"] }
+embassy-sync = "0.8.0"
+embassy-time = "0.5.1"
+embassy-usb = { version = "0.6.0", default-features = false }
 
+cortex-m = "0.7.7"
 defmt = { version = "1.1.0", optional = true }
 pio = "0.3.0"
-pio-proc = "0.3.0"
-embassy-sync = "0.8.0"
-cortex-m = "0.7.7"
 
 [features]
 default = ["rp2040"]

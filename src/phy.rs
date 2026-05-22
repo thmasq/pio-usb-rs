@@ -1,3 +1,5 @@
+#![allow(clippy::verbose_bit_mask)]
+
 //! Software PHY Layer for USB NRZI Encoding and Bit-Stuffing.
 
 /// State mapping for PIO TX instructions.

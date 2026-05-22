@@ -861,7 +861,6 @@ dependencies = [
  "embassy-time",
  "embassy-usb",
  "pio",
- "pio-proc",
 ]
 
 [[package]]

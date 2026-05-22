@@ -9,4 +9,3 @@ command = "check"
 extraArgs = [
   "--release",
 ]
-

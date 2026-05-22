@@ -10,7 +10,8 @@ const CRC5_TBL: [u8; 32] = [
 ///
 /// The `data` parameter should contain the 11 bits of data.
 /// Returns the 5-bit CRC value.
-pub fn calc_usb_crc5(mut data: u16) -> u8 {
+#[must_use]
+pub const fn calc_usb_crc5(mut data: u16) -> u8 {
     data ^= 0x1f;
 
     let lsb = ((data >> 1) & 0x1f) as u8;
@@ -51,13 +52,16 @@ const CRC16_TBL: [u16; 256] = [
 ];
 
 /// Incrementally updates a CRC16 value with a single byte of data.
+#[allow(clippy::inline_always)]
 #[inline(always)]
-pub fn update_usb_crc16(crc: u16, data: u8) -> u16 {
+#[must_use]
+pub const fn update_usb_crc16(crc: u16, data: u8) -> u16 {
     let lookup_idx = (crc ^ (data as u16)) & 0xff;
     (crc >> 8) ^ CRC16_TBL[lookup_idx as usize]
 }
 
 /// Calculates the CRC16-USB for an entire array of data (e.g., Data Packets).
+#[must_use]
 pub fn calc_usb_crc16(data: &[u8]) -> u16 {
     let mut crc = 0xffff;
 

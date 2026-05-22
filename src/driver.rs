@@ -1,3 +1,5 @@
+#![allow(clippy::new_without_default, clippy::cast_possible_truncation)]
+
 use core::cell::RefCell;
 use core::marker::PhantomData;
 use embassy_rp::dma::Channel;
@@ -45,7 +47,7 @@ impl interrupt::typelevel::Handler<interrupt::typelevel::PIO0_IRQ_0> for PioUsbI
 
                     if len < 2 {
                         // ---- RESET DETECTION ----
-                        let sio_gpio_in = 0xd0000004 as *const u32;
+                        let sio_gpio_in = 0xd000_0004 as *const u32;
                         let initial_pins = unsafe { core::ptr::read_volatile(sio_gpio_in) };
 
                         if (initial_pins & state.dp_dm_mask) == 0 {
@@ -56,11 +58,11 @@ impl interrupt::typelevel::Handler<interrupt::typelevel::PIO0_IRQ_0> for PioUsbI
                                 state.bus_event = Some(Event::Reset);
                                 state.bus_waker.wake();
 
-                                for ep in state.ep_in_states.iter_mut() {
+                                for ep in &mut state.ep_in_states {
                                     ep.enabled = false;
                                     ep.status = EndpointStatus::Idle;
                                 }
-                                for ep in state.ep_out_states.iter_mut() {
+                                for ep in &mut state.ep_out_states {
                                     ep.enabled = false;
                                     ep.status = EndpointStatus::Idle;
                                 }
@@ -229,7 +231,8 @@ impl<'d, T: Instance, const SM_TX: usize, const SM_RX: usize, const SM_EOP: usiz
     PioUsbHardware<'d, T, state::Uninitialized, SM_TX, SM_RX, SM_EOP>
 {
     /// Claim the raw peripherals from Embassy. The hardware is not yet ready to use.
-    pub fn new(
+    #[must_use]
+    pub const fn new(
         tx_sm: StateMachine<'d, T, SM_TX>,
         rx_sm: StateMachine<'d, T, SM_RX>,
         eop_sm: StateMachine<'d, T, SM_EOP>,
@@ -345,7 +348,8 @@ pub struct PioUsbDriver<
 impl<'d, T: Instance + PioExt, const SM_TX: usize, const SM_RX: usize, const SM_EOP: usize>
     PioUsbDriver<'d, T, SM_TX, SM_RX, SM_EOP>
 {
-    pub fn new(
+    #[must_use]
+    pub const fn new(
         hw: PioUsbHardware<'d, T, state::Configured, SM_TX, SM_RX, SM_EOP>,
         pullup_pin: Output<'d>,
     ) -> Self {
@@ -358,7 +362,7 @@ impl<'d, T: Instance + PioExt, const SM_TX: usize, const SM_RX: usize, const SM_
     }
 }
 
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Copy, Clone, PartialEq, Eq)]
 pub enum EndpointStatus {
     Idle,          // Will respond with NAK
     RxReady,       // Async task is waiting for data (will receive and ACK)
@@ -381,6 +385,7 @@ pub struct EndpointState {
 }
 
 impl EndpointState {
+    #[must_use]
     pub const fn new() -> Self {
         Self {
             waker: AtomicWaker::new(),
@@ -470,22 +475,20 @@ impl<'d, T: Instance + PioExt, const SM_TX: usize, const SM_RX: usize, const SM_
         max_packet_size: u16,
         interval_ms: u8,
     ) -> Result<Self::EndpointIn, EndpointAllocError> {
-        let index = match ep_addr {
-            Some(addr) => {
-                let idx = addr.index();
-                if (self.ep_in_alloc & (1 << idx)) != 0 {
-                    return Err(EndpointAllocError);
-                }
-                idx
+        let index = if let Some(addr) = ep_addr {
+            let idx = addr.index();
+            if (self.ep_in_alloc & (1 << idx)) != 0 {
+                return Err(EndpointAllocError);
             }
-            None => {
-                let idx = self.ep_in_alloc.trailing_ones() as usize;
-                if idx >= 16 {
-                    return Err(EndpointAllocError);
-                }
-                idx
+            idx
+        } else {
+            let idx = self.ep_in_alloc.trailing_ones() as usize;
+            if idx >= 16 {
+                return Err(EndpointAllocError);
             }
+            idx
         };
+
         self.ep_in_alloc |= 1 << index;
 
         Ok(PioEndpointIn {
@@ -506,22 +509,20 @@ impl<'d, T: Instance + PioExt, const SM_TX: usize, const SM_RX: usize, const SM_
         max_packet_size: u16,
         interval_ms: u8,
     ) -> Result<Self::EndpointOut, EndpointAllocError> {
-        let index = match ep_addr {
-            Some(addr) => {
-                let idx = addr.index();
-                if (self.ep_out_alloc & (1 << idx)) != 0 {
-                    return Err(EndpointAllocError);
-                }
-                idx
+        let index = if let Some(addr) = ep_addr {
+            let idx = addr.index();
+            if (self.ep_out_alloc & (1 << idx)) != 0 {
+                return Err(EndpointAllocError);
             }
-            None => {
-                let idx = self.ep_out_alloc.trailing_ones() as usize;
-                if idx >= 16 {
-                    return Err(EndpointAllocError);
-                }
-                idx
+            idx
+        } else {
+            let idx = self.ep_out_alloc.trailing_ones() as usize;
+            if idx >= 16 {
+                return Err(EndpointAllocError);
             }
+            idx
         };
+
         self.ep_out_alloc |= 1 << index;
 
         Ok(PioEndpointOut {
@@ -548,7 +549,7 @@ impl<'d, T: Instance + PioExt, const SM_TX: usize, const SM_RX: usize, const SM_
         unsafe {
             self.hw
                 .eop_sm
-                .exec_instr(fill_osr_instr.encode(SideSet::default()))
+                .exec_instr(fill_osr_instr.encode(SideSet::default()));
         };
 
         let clear_x_instr = Instruction {
@@ -563,7 +564,7 @@ impl<'d, T: Instance + PioExt, const SM_TX: usize, const SM_RX: usize, const SM_
         unsafe {
             self.hw
                 .eop_sm
-                .exec_instr(clear_x_instr.encode(SideSet::default()))
+                .exec_instr(clear_x_instr.encode(SideSet::default()));
         };
 
         self.hw.rx_sm.set_enable(true);
@@ -581,17 +582,17 @@ impl<'d, T: Instance + PioExt, const SM_TX: usize, const SM_RX: usize, const SM_
         let pio_regs = T::pio_regs();
         let is_pio0 = pio_regs.as_ptr() as u32 == embassy_rp::pac::PIO0.as_ptr() as u32;
 
-        let pio_irq_ptr = pio_regs.irq().as_ptr() as *mut u32;
-        let pio_fstat_ptr = pio_regs.fstat().as_ptr() as *mut u32;
+        let pio_irq_ptr = pio_regs.irq().as_ptr().cast::<u32>();
+        let pio_fstat_ptr = pio_regs.fstat().as_ptr().cast::<u32>();
 
         let dma_ch = self.hw.tx_dma.regs();
         dma_ch
             .write_addr()
             .write_value(pio_regs.txf(SM_TX).as_ptr() as u32);
 
-        let tx_dma_read_addr_ptr = dma_ch.read_addr().as_ptr() as *mut u32;
-        let tx_dma_trans_count_ptr = dma_ch.trans_count().as_ptr() as *mut u32;
-        let tx_dma_trigger_ptr = dma_ch.ctrl_trig().as_ptr() as *mut u32;
+        let tx_dma_read_addr_ptr = dma_ch.read_addr().as_ptr().cast::<u32>();
+        let tx_dma_trans_count_ptr = dma_ch.trans_count().as_ptr().cast::<u32>();
+        let tx_dma_trigger_ptr = dma_ch.ctrl_trig().as_ptr().cast::<u32>();
 
         let mut ctrl = embassy_rp::pac::dma::regs::CtrlTrig::default();
         ctrl.set_data_size(embassy_rp::pac::dma::vals::DataSize::SIZE_BYTE);
@@ -623,9 +624,9 @@ impl<'d, T: Instance + PioExt, const SM_TX: usize, const SM_RX: usize, const SM_
             .read_addr()
             .write_value(pio_regs.rxf(SM_EOP).as_ptr() as u32);
 
-        let rx_dma_write_addr_ptr = dma_rx_ch.write_addr().as_ptr() as *mut u32;
-        let rx_dma_trans_count_ptr = dma_rx_ch.trans_count().as_ptr() as *mut u32;
-        let rx_dma_ctrl_trig_ptr = dma_rx_ch.ctrl_trig().as_ptr() as *mut u32;
+        let rx_dma_write_addr_ptr = dma_rx_ch.write_addr().as_ptr().cast::<u32>();
+        let rx_dma_trans_count_ptr = dma_rx_ch.trans_count().as_ptr().cast::<u32>();
+        let rx_dma_ctrl_trig_ptr = dma_rx_ch.ctrl_trig().as_ptr().cast::<u32>();
 
         let mut rx_ctrl = embassy_rp::pac::dma::regs::CtrlTrig::default();
         rx_ctrl.set_data_size(embassy_rp::pac::dma::vals::DataSize::SIZE_BYTE);
@@ -714,7 +715,7 @@ impl<'d, T: Instance + PioExt, const SM_TX: usize, const SM_RX: usize, const SM_
     }
 }
 
-impl<'d> Endpoint for PioEndpointIn<'d> {
+impl Endpoint for PioEndpointIn<'_> {
     fn info(&self) -> &EndpointInfo {
         &self.info
     }
@@ -738,7 +739,7 @@ impl<'d> Endpoint for PioEndpointIn<'d> {
     }
 }
 
-impl<'d> EndpointIn for PioEndpointIn<'d> {
+impl EndpointIn for PioEndpointIn<'_> {
     async fn write(&mut self, buf: &[u8]) -> Result<(), EndpointError> {
         let ep = self.info.addr.index();
         let mut encoded = [0u8; 128];
@@ -770,7 +771,7 @@ impl<'d> EndpointIn for PioEndpointIn<'d> {
     }
 }
 
-impl<'d> Endpoint for PioEndpointOut<'d> {
+impl Endpoint for PioEndpointOut<'_> {
     fn info(&self) -> &EndpointInfo {
         &self.info
     }
@@ -794,7 +795,7 @@ impl<'d> Endpoint for PioEndpointOut<'d> {
     }
 }
 
-impl<'d> EndpointOut for PioEndpointOut<'d> {
+impl EndpointOut for PioEndpointOut<'_> {
     async fn read(&mut self, buf: &mut [u8]) -> Result<usize, EndpointError> {
         let ep = self.info.addr.index();
 
@@ -826,7 +827,7 @@ impl<'d> EndpointOut for PioEndpointOut<'d> {
     }
 }
 
-impl<'d> ControlPipe for PioControlPipe<'d> {
+impl ControlPipe for PioControlPipe<'_> {
     fn max_packet_size(&self) -> usize {
         64
     }
@@ -936,8 +937,8 @@ impl<'d> ControlPipe for PioControlPipe<'d> {
     }
 }
 
-impl<'d, T: Instance, const SM_TX: usize, const SM_RX: usize, const SM_EOP: usize> Bus
-    for PioUsbBus<'d, T, SM_TX, SM_RX, SM_EOP>
+impl<T: Instance, const SM_TX: usize, const SM_RX: usize, const SM_EOP: usize> Bus
+    for PioUsbBus<'_, T, SM_TX, SM_RX, SM_EOP>
 {
     async fn poll(&mut self) -> Event {
         core::future::poll_fn(|cx| {
