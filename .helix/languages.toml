@@ -1,0 +1,12 @@
+[[language]]
+name = "rust"
+
+[language-server.rust-analyzer.config.cargo]
+target = "thumbv6m-none-eabi"
+
+[language-server.rust-analyzer.config.check]
+command = "check"
+extraArgs = [
+  "--release",
+]
+
